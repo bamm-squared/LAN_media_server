@@ -1,0 +1,17 @@
+library_root: /home/bamm/Videos/MovieBackup
+secret_key: "CHANGE-ME"
+admin_key: "CHANGE-ADMIN"
+parental_pin: "1234"              # PIN users enter on Roku
+
+# classification
+default_is_kids: true             # default classification if not matched below
+
+# Any folder listed here (and its subtree) is ADULT/RESTRICTED
+# Paths are RELATIVE to library_root
+adult_paths:
+  - Movies
+
+# hide these folder names from browse (e.g., artwork store)
+hidden_dir_names:
+  - images
+
