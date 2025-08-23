@@ -1,4 +1,4 @@
-library_root: /home/bamm/Videos/MovieBackup
+library_root: /mnt/Videos/
 secret_key: "CHANGE-ME"
 admin_key: "CHANGE-ADMIN"
 parental_pin: "1234"              # PIN users enter on Roku
