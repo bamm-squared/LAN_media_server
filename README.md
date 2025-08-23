@@ -1,5 +1,17 @@
 # home_media_server
 Intended for use with a Raspberry Pi 4/5
+
+## Modify config.yaml
+<code>library_root</code> is where you have the videos stored. Use folders to make navigation easier. 
+
+<code>secret_key/admin_key</code> are for FastAPI and not necessary in this application.
+
+If you want to use a parental pin, set the <code>parental_pin</code> here, and then under adult_paths</code>, list the relative subdirectories you do not want kids to get into. This will prompt the user for a pin on the Roku before allowing access to the folder.
+
+Artwork for the video cards are stored in <code>/library_root/images/</code>. Choose whatever image you want for a video and save it with an identical name to the video. For example, a video <code>Josh_birthday.mp4</code> would pull the card image from <code>/library_root/images/Josh_birthday.png</code>. Works with png, jpg, webp and a few others.
+
+Roku is picky about video format. H.264/AVC has broad support. H.265/HEVC, VP9, and AV1 are supported on most 4K models. Containers are MP4, M4V, MKV, MOV.
+
 ## Prep the Pi
 <code>
 sudo apt update
