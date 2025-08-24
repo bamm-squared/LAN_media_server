@@ -21,8 +21,8 @@ sudo adduser --system --group --home /opt/media-server media-server</code>
 
 ## Put the app in place
 <code>
-sudo mkdir -p /opt/chunkflix
-sudo chown -R $USER:$USER /opt/chunkflix
+sudo mkdir -p /opt/media-server
+sudo chown -R $USER:$USER /opt/media-server
 cd /opt/media-server</code>
 
 ##### 
@@ -45,7 +45,7 @@ Open the service file and point ExecStart and WorkingDirectory at your folder.
 
 Install & start it:
 <code>
-sudo cp /opt/chunkflix/media-server.service /etc/systemd/system/media-server.service
+sudo cp /opt/media-server/media-server.service /etc/systemd/system/media-server.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now media-server
 sudo systemctl status media-server --no-pager
