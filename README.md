@@ -66,3 +66,9 @@ sudo ufw allow from 172.16.0.0/12 to any port 8008 proto tcp
 sudo ufw enable
 sudo ufw status verbose
 </code>
+
+## Website functionality
+<code>
+sudo mkdir /opt/media-server/web/
+</code>
+Paste the code in /web/index.html onto the server at /opt/media-server/web/index.html
