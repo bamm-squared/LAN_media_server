@@ -13,9 +13,10 @@ from typing import Dict, List, Optional, Tuple
 import uvicorn
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 import yaml
+from fastapi.staticfiles import StaticFiles
 
 # ------------------------------------------------------------
 # Configuration
@@ -457,6 +458,17 @@ def api_admin_rescan(req: RescanReq, x_admin_key: Optional[str] = Header(None)):
         raise HTTPException(401, "Unauthorized")
     count = scan_library(full_rescan=bool(req.full))
     return {"ok": True, "count": count, "full": bool(req.full)}
+
+# ------------------------------------------------------------
+# Web server
+# ------------------------------------------------------------
+
+app.mount("/web", StaticFiles(directory="web", html=True), name="web")
+
+@app.get("/", include_in_schema=False)
+def root_redirect():
+    # send browser users to the web UI
+    return RedirectResponse(url="/web/", status_code=307)
 
 # ------------------------------------------------------------
 # Startup
