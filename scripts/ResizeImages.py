@@ -6,7 +6,7 @@ Script to save the images in the right size for the Roku app
 import os
 from PIL import Image, ImageOps
 
-INPUT_DIR = "/home/bamm/Videos/MovieBackup/images"     # change this
+INPUT_DIR = "/path/to/Videos/images"     # change this
 OUTPUT_DIR = os.path.join(INPUT_DIR, "resized")  # subdirectory for results
 TARGET_W, TARGET_H = 440, 350
 
