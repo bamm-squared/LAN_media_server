@@ -6,65 +6,129 @@
 <title>Chunkflix (Web)</title>
 <style>
   :root{
-    --bg:#0f0f12; --fg:#f3f3f5; --muted:#a6a6b0; --accent:#6aa2ff;
-    --card:#1a1a20; --card2:#22222a; --danger:#ff4d4d;
+    --page:#110716;
+    --panel:#1c1024;
+    --card:#23142d;
+    --card2:#2a1833;
+    --text:#f8edff;
+    --muted:#b595c4;
+    --line:#4b2b59;
+    --accent:#ff4bd8;
+    --danger:#ffb357;
+    --dangerBg:#2f1408;
+    --active:#321a3d;
+    --track:#ffffff20;
+    --input:#100716;
+    --main:#130a18;
+    --weaveA:#15091a;
+    --weaveB:#211027;
+    --weaveC:#2b1532;
   }
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,system-ui,Arial;}
-  .app{display:flex; height:100vh; overflow:hidden;}
-  .sidebar{width:140px; min-width:120px; background:var(--card); padding:16px; box-sizing:border-box; overflow:auto; border-right:1px solid #2a2a33;}
-  .path{padding:12px; border-bottom:1px solid #2a2a33; font-weight:600; white-space:nowrap; overflow:auto;}
-  .folders{list-style:none; padding:0; margin:12px 0 0 0;}
-  .folders li{display:flex; overflow:hidden; padding:8px 10px; margin:4px 0; background:var(--card2); border-radius:8px; cursor:pointer; user-select:none;}
-  .folders li:hover{outline:1px solid #333a; background:#252530;}
-  .folders li.up{color:var(--muted);}
-  .folders .lock{flex:0 0 auto; margin-left:8px; opacity:.7}
-  .main{flex:1; padding:16px; overflow:auto;}
-  .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:16px;}
-  .card{background:var(--card); border-radius:12px; overflow:hidden; box-shadow:0 1px 0 #0008; display:flex; flex-direction:column;}
-  .thumb{aspect-ratio:16/12; background:#0b0b0f; display:flex; align-items:center; justify-content:center;}
-  .thumb img{width:100%; height:100%; object-fit:contain; background:#0b0b0f;}
-  .label{padding:10px 10px 12px; color:var(--fg); min-height:2.8em; display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical; overflow:hidden;}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;color:var(--text);font:14px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,system-ui,Arial;letter-spacing:0;background:var(--page)}
+  body{display:flex;flex-direction:column;min-height:100vh;width:100%;max-width:100vw;overflow:hidden;overscroll-behavior:none}
+  button,input{font:inherit}
+  .weave-bg{background-color:var(--weaveA);background-image:linear-gradient(135deg,rgba(56,32,64,.24) 0 8px,transparent 8px 16px,rgba(13,6,16,.36) 16px 24px,transparent 24px 32px),linear-gradient(45deg,transparent 0 8px,rgba(43,21,50,.30) 8px 16px,transparent 16px 24px,rgba(13,6,16,.34) 24px 32px),linear-gradient(135deg,var(--weaveB) 0 12px,var(--weaveA) 12px 24px,var(--weaveC) 24px 36px,var(--weaveA) 36px 48px);background-size:48px 48px,48px 48px,48px 48px;background-position:0 0,24px 0,0 0}
+  .topnav{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:10px 22px;border-bottom:1px solid var(--line);box-shadow:0 14px 34px #0007;position:relative;z-index:3;min-width:0}
+  .topnav:after,.continue:after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(135deg,rgba(255,255,255,.025) 0 2px,transparent 2px 10px),repeating-linear-gradient(45deg,rgba(0,0,0,.16) 0 2px,transparent 2px 10px);mix-blend-mode:screen;opacity:.18}
+  .brand{position:relative;z-index:1;display:flex;align-items:center;gap:0;margin-right:8px;color:var(--text);white-space:nowrap;flex:0 0 auto}
+  .brand-mark{display:grid;place-items:center;width:46px;height:46px;border:1px solid var(--accent);background:#100716;color:var(--accent);font-weight:950;box-shadow:0 0 18px #ff4bd8;font-size:24px;line-height:1}
+  .path{position:relative;z-index:1;flex:0 0 auto;max-width:260px;min-width:120px;padding:8px 10px;border:1px solid transparent;color:var(--muted);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:none;font-size:16px}
+  .status{position:relative;z-index:1;margin-left:0;color:var(--muted);font-size:12px;font-weight:800;text-transform:uppercase;white-space:nowrap;flex:0 0 auto}
+  .search{position:relative;z-index:1;display:flex;align-items:center;gap:6px;flex:0 0 250px;min-width:180px}
+  .search input{width:100%;min-width:0;height:42px;padding:9px 34px 9px 12px;background:#100716d9;color:var(--text);border:1px solid #5b3568;font-weight:800;outline:none}
+  .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #ff4bd833}
+  .search button{position:absolute;right:4px;top:4px;width:34px;height:34px;padding:0;border:1px solid transparent;background:transparent;color:var(--muted);font-size:20px;font-weight:950;line-height:1;cursor:pointer}
+  .search button:hover,.search button:focus{color:var(--accent);outline:2px solid var(--accent);outline-offset:1px;background:var(--active)}
+  .folderbar{flex:1 1 auto;display:flex;align-items:center;gap:10px;padding:0;position:relative;z-index:1;min-width:0;min-height:42px}
+  .folderbar-title{position:relative;z-index:1;flex:0 0 auto;color:var(--muted);font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.08em}
+  .folders{position:relative;z-index:1;list-style:none;padding:0;margin:0;display:flex;flex-wrap:nowrap;gap:10px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;min-width:0;flex:1;white-space:nowrap;padding-bottom:2px}
+  .folders li{flex:0 0 auto;display:flex;align-items:center;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:9px 16px;background:rgba(35,20,45,.94);border:1px solid var(--line);cursor:pointer;user-select:none;color:var(--text);font-weight:900;box-shadow:inset 0 1px #ffffff10,0 10px 22px #0005;text-transform:none;min-height:42px}
+  .folders li:hover,.folders li:focus{outline:3px solid var(--accent);outline-offset:2px;background:var(--active);box-shadow:0 0 0 6px #ff4bd833,0 0 24px #000}
+  .folders li.current{border-color:var(--accent);box-shadow:inset 0 -4px var(--accent),0 10px 22px #0005}
+  .folders li.up{color:var(--muted)}
+  .folders .lock{flex:0 0 auto;margin-left:8px;opacity:.8;color:var(--danger)}
+  .app{flex:1;min-height:0;display:grid;grid-template-columns:250px minmax(0,1fr);overflow:hidden;background:var(--main)}
+  .app.no-continue{grid-template-columns:minmax(0,1fr)}
+  .continue{position:relative;overflow:auto;padding:24px 16px;background-color:var(--weaveA);background-image:linear-gradient(135deg,rgba(56,32,64,.18) 0 8px,transparent 8px 16px,rgba(13,6,16,.26) 16px 24px,transparent 24px 32px),linear-gradient(45deg,transparent 0 8px,rgba(43,21,50,.22) 8px 16px,transparent 16px 24px,rgba(13,6,16,.24) 24px 32px),linear-gradient(135deg,#211027 0 12px,#170b1d 12px 24px,#2a1431 24px 36px,#170b1d 36px 48px);background-size:48px 48px,48px 48px,48px 48px;background-position:0 0,24px 0,0 0;border-right:1px solid var(--line)}
+  .section-title{position:relative;z-index:1;font-weight:950;margin:0 0 16px;text-transform:none;color:var(--text);font-size:26px;line-height:1.05;text-shadow:0 2px 12px #000;overflow-wrap:anywhere}
+  .section-subtitle{display:none}
+  .rail{position:relative;z-index:1;display:grid;gap:14px;overflow:visible;padding:0}
+  .empty-continue{position:relative;z-index:1;color:var(--muted);border:1px solid var(--line);background:rgba(35,20,45,.74);padding:16px;font-weight:800;box-shadow:inset 0 1px #ffffff10}
+  .rail .card{display:flex;flex-direction:column;gap:0;padding:8px;min-height:0}
+  .rail-reset{display:none}
+  .rail .rail-reset{display:grid;place-items:center;position:absolute;left:12px;top:12px;width:28px;height:28px;padding:0;border:1px solid #ff4bd8;background:#100716d9;color:var(--accent);font-size:18px;font-weight:950;line-height:1;cursor:pointer;z-index:5;box-shadow:0 0 14px #ff4bd866}
+  .rail .rail-reset:hover,.rail .rail-reset:focus{outline:2px solid var(--accent);outline-offset:2px;background:var(--active)}
+  .rail .thumb{aspect-ratio:16/12;width:100%;height:auto}
+  .rail .thumb:before{display:none}
+  .rail .label{min-height:2.8em;padding:10px 2px 0;font-size:15px;align-self:auto;width:100%;text-align:left}
+  .rail .thumb .progress{display:none}
+  .rail-progress{display:none}
+  .rail .rail-progress{display:block;position:relative;width:100%;height:8px;margin-top:8px;background:var(--track);overflow:hidden;z-index:3;box-shadow:0 0 10px rgba(255,75,216,.34)}
+  .rail .rail-progress .fill{height:100%;background:var(--accent);box-shadow:0 0 14px #ff4bd8}
+  .main{padding:18px 30px 24px;overflow:auto;background:linear-gradient(135deg,#150b1a,#100714);min-width:0}
+  .topbar{display:none}
+  .topbar .row{min-width:0}
   .muted{color:var(--muted)}
-  .row{display:flex; align-items:center; gap:6px;}
-  .btn{padding:6px 10px; background:var(--accent); color:#111; border:none; border-radius:8px; cursor:pointer; font-weight:600;}
-  .btn:disabled{opacity:.5; cursor:not-allowed}
-  .danger{background:var(--danger); color:white}
-  .topbar{display:flex; gap:8px; align-items:center; padding:0 16px 12px;}
-  .status{margin-left:auto; color:var(--muted); font-size:12px}
-
-  /* Modal */
-  .modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.5);}
-  .dialog{background:var(--card); padding:20px; border-radius:12px; width:min(90vw,400px)}
-  .dialog h3{margin:0 0 10px}
-  .dialog .field{display:flex; gap:8px; margin-top:10px}
-  .dialog input{flex:1; background:#101017; color:var(--fg); border:1px solid #2a2a33; border-radius:8px; padding:10px}
-  .dialog .actions{display:flex; justify-content:flex-end; gap:10px; margin-top:14px}
-
-  /* Video overlay */
-  .player{position:fixed; z-index:9999; inset:0; background:#000c; display:none; align-items:center; justify-content:center;}
-  .player-inner{background:#000; width:min(90vw,1000px); aspect-ratio:16/9; position:relative; border-radius:8px; overflow:hidden;}
-  .player video{width:100%; height:100%; z-index:1;}
-  .player .close{position:absolute; right:10px; top:10px; z-index:2; pointer-events:auto; background:#000b; color:#fff; border:none; border-radius:8px; padding:6px 10px; cursor:p>
-
+  #dirLabel{font-size:28px;color:var(--text);font-weight:950;text-transform:none;text-shadow:0 2px 10px #000}
+  .row{display:flex;align-items:center;gap:8px}
+  .btn{position:relative;z-index:1;padding:9px 18px;background:rgba(42,24,51,.92);color:var(--text);border:1px solid #5b3568;cursor:pointer;font-weight:950;text-transform:none;box-shadow:inset 0 1px #ffffff10;font-size:16px;min-height:42px}
+  .btn:hover,.btn:focus{outline:3px solid var(--accent);outline-offset:2px;background:var(--active);box-shadow:inset 0 -4px var(--accent)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .danger{background:var(--dangerBg);color:var(--danger)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:18px;align-items:start}
+  .card{background:rgba(35,20,45,.94);border:1px solid var(--line);overflow:hidden;box-shadow:inset 0 1px #ffffff10,0 16px 36px #0007;display:flex;flex-direction:column;cursor:pointer;position:relative;padding:8px;min-width:0}
+  .card:hover,.card:focus{outline:3px solid var(--accent);outline-offset:3px;background:var(--active);box-shadow:0 0 0 6px #ff4bd833,0 0 24px #000}
+  .thumb{aspect-ratio:16/12;background:#13081b;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .thumb:before{content:"";position:absolute;inset:auto -20% 0;height:52%;background:linear-gradient(to top,#21f3ff22,transparent),repeating-linear-gradient(90deg,#21f3ff33 0 2px,transparent 2px 44px);transform:perspective(250px) rotateX(56deg);transform-origin:bottom;opacity:.32;z-index:1}
+  .thumb img{width:100%;height:100%;object-fit:contain;background:#13081b;position:relative;z-index:0}
+  .label{padding:12px 2px 4px;color:var(--text);height:54px;min-height:54px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:900;text-shadow:0 2px 10px #000;font-size:16px}
+  .progress{position:absolute;left:8px;right:8px;bottom:8px;height:8px;background:var(--track);overflow:hidden;z-index:3;box-shadow:0 0 10px rgba(255,75,216,.62)}
+  .grid .thumb .progress{left:0;right:0;bottom:0;height:8px}
+  .progress .fill{height:100%;background:var(--accent);box-shadow:0 0 14px #ff4bd8}
+  .modal{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(6,2,8,.72)}
+  .dialog{background:rgba(35,20,45,.98);padding:24px;width:min(90vw,430px);border:1px solid var(--line);border-left:5px solid var(--accent);box-shadow:0 24px 80px #000b;color:var(--text)}
+  .dialog h3{margin:0 0 10px;text-transform:none;font-size:22px}
+  .dialog .field{display:flex;gap:8px;margin-top:12px}
+  .dialog input{flex:1;background:var(--input);color:var(--text);border:1px solid var(--line);padding:13px 14px;min-width:0}
+  .dialog .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
+  .player{position:fixed;z-index:30;inset:0;background:#050207e6;display:none;align-items:center;justify-content:center}
+  .player-inner{background:#050207;width:min(92vw,1120px);aspect-ratio:16/9;position:relative;overflow:hidden;border:1px solid var(--line);box-shadow:0 24px 90px #000}
+  .player video{width:100%;height:100%;z-index:1;background:#000}
+  .player .close,.player .start-over{position:absolute;top:14px;z-index:2;pointer-events:auto;background:#13081bf0;color:var(--text);border:1px solid var(--line);padding:10px 14px;cursor:pointer;font-weight:900;text-transform:none}
+  .player .close:hover,.player .start-over:hover,.player .close:focus,.player .start-over:focus{outline:3px solid var(--accent);outline-offset:2px}
+  .player .close{right:14px}
+  .player .start-over{left:14px}
   .hidden{display:none!important}
+  @media(max-width:1050px){body{overflow:auto}.topnav{flex-wrap:wrap}.brand{margin-right:0}.path{max-width:none;flex:1 1 180px}.search{flex:1 1 220px}.folderbar{flex-basis:100%;order:5}.app{grid-template-columns:1fr;height:auto;min-height:60vh;overflow:visible}.continue{border-right:0;border-bottom:1px solid var(--line);max-height:none}.rail{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}.main{min-height:55vh}.grid{grid-template-columns:repeat(2,minmax(130px,1fr))}.dialog .field,.input-row{flex-direction:column}}
 </style>
 </head>
 <body>
-<div class="path" id="breadcrumb">/</div>
-<div class="app">
-  <aside class="sidebar">
-    <div class="row">
-      <button class="btn" id="btnRoot">Root</button>
-      <button class="btn" id="btnSettings">Server</button>
-    </div>
+<header class="topnav weave-bg">
+  <div class="brand"><span class="brand-mark">CF</span></div>
+  <div class="path" id="breadcrumb">/</div>
+  <button class="btn" id="btnRoot">Home</button>
+  <button class="btn" id="btnSettings">Server</button>
+  <nav class="folderbar" aria-label="Folders">
+    <div class="folderbar-title">Folders</div>
     <ul class="folders" id="folders"></ul>
+  </nav>
+  <span class="status" id="status"></span>
+  <form class="search" id="searchForm" role="search">
+    <input id="searchInput" type="search" placeholder="Search" autocomplete="off" />
+    <button id="searchClear" type="button" aria-label="Clear search">×</button>
+  </form>
+</header>
+<div class="app no-continue" id="appShell">
+  <aside class="continue hidden" id="continueSection">
+    <div class="section-title">Continue Watching</div>
+    <div class="rail" id="continueRail"></div>
   </aside>
   <main class="main">
     <div class="topbar">
       <div class="row">
         <span class="muted" id="dirLabel">Loading...</span>
       </div>
-      <span class="status" id="status"></span>
     </div>
     <div class="grid" id="grid"></div>
   </main>
@@ -89,7 +153,7 @@
   <div class="dialog">
     <h3>Server</h3>
     <div>Enter media server base URL (same Pi):</div>
-    <div class="field"><input id="serverInput" placeholder="http://192.168.10.63:8000"/></div>
+    <div class="field"><input id="serverInput" placeholder="http://192.168.10.63:8008"/></div>
     <div class="actions">
       <button class="btn" id="settingsCancel">Cancel</button>
       <button class="btn" id="settingsOk">Save</button>
@@ -100,6 +164,7 @@
 <!-- Player Overlay -->
 <div class="player" id="player">
   <div class="player-inner">
+    <button class="start-over hidden" id="playerStartOver">Start Over</button>
     <button class="close" id="playerClose">✕ Close</button>
     <video id="video" controls playsinline></video>
   </div>
@@ -114,8 +179,14 @@
     dirLabel: document.getElementById('dirLabel'),
     status: document.getElementById('status'),
     breadcrumb: document.getElementById('breadcrumb'),
+    appShell: document.getElementById('appShell'),
+    continueSection: document.getElementById('continueSection'),
+    continueRail: document.getElementById('continueRail'),
     btnRoot: document.getElementById('btnRoot'),
     btnSettings: document.getElementById('btnSettings'),
+    searchForm: document.getElementById('searchForm'),
+    searchInput: document.getElementById('searchInput'),
+    searchClear: document.getElementById('searchClear'),
     // PIN
     pinModal: document.getElementById('pinModal'),
     pinInput: document.getElementById('pinInput'),
@@ -130,14 +201,19 @@
     // Player
     player: document.getElementById('player'),
     playerClose: document.getElementById('playerClose'),
+    playerStartOver: document.getElementById('playerStartOver'),
     video: document.getElementById('video'),
   };
 
   // Use same-origin by default (since we host the page on the Pi).
   const storage = window.localStorage;
   let SERVER = storage.getItem('serverBase') || window.location.origin;
+  const DEVICE_ID = getDeviceId();
   let authToken = "";           // token for current restricted folder
   let pendingDir = null;        // dir we attempted that needs PIN
+  let currentVideo = null;
+  let progressTimer = null;
+  let currentSearch = "";
   const stack = [];             // breadcrumb [{id,name}]
 
   // --- Utilities ---
@@ -147,12 +223,21 @@
                      .map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
   const setStatus = (t) => els.status.textContent = t || '';
 
+  function getDeviceId() {
+    let id = storage.getItem('deviceId');
+    if (!id) {
+      id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : ('web-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+      storage.setItem('deviceId', id);
+    }
+    return id;
+  }
+
   function normalizeBrowse(json) {
     if (!json) return null;
     if (json.dir) {
       const out = { dirId: json.dir.id, dirName: json.dir.name || json.dir.title || 'Untitled', folders: [], videos: [] };
       (json.subdirs||[]).forEach(d => out.folders.push({ id: d.id, name: d.name || d.title }));
-      (json.media||[]).forEach(m => out.videos.push({ id: m.id, name: m.name || m.title || m.filename }));
+      (json.media||[]).forEach(m => out.videos.push({ id: m.id, media_key: m.media_key, name: m.name || m.title || m.filename, progress: m.progress || null }));
       return out;
     }
     if (json.folder && json.items) {
@@ -160,7 +245,7 @@
       json.items.forEach(it => {
         const t = (it.type||'').toLowerCase();
         if (t === 'folder' || t === 'directory') out.folders.push({ id: it.id, name: it.name || it.title });
-        else out.videos.push({ id: it.id, name: it.name || it.title });
+        else out.videos.push({ id: it.id, media_key: it.media_key, name: it.name || it.title, progress: it.progress || null });
       });
       return out;
     }
@@ -194,42 +279,95 @@
       const li = document.createElement('li');
       li.className = 'up';
       li.textContent = '.. (Up)';
+      li.tabIndex = 0;
       li.onclick = () => goUp();
+      li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goUp(); } };
       els.folders.appendChild(li);
     }
     items.forEach(f => {
       const li = document.createElement('li');
+      li.tabIndex = 0;
       li.textContent = f.name;
       // visual hint if likely restricted (server doesn't flag, so skip icon unless desired)
       const lock = document.createElement('span'); lock.className='lock'; lock.textContent='';
       li.appendChild(lock);
       li.onclick = () => browseInto(f.id, f.name);
+      li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); browseInto(f.id, f.name); } };
+      if (stack.length && stack[stack.length - 1].id === f.id) li.classList.add('current');
       els.folders.appendChild(li);
     });
   }
 
+  function createMediaCard(v, opts={}) {
+    const card = document.createElement('div'); card.className = 'card'; card.tabIndex = 0;
+    const th = document.createElement('div'); th.className = 'thumb';
+    const img = document.createElement('img');
+    const base = stripExt(v.name||'');
+    const art = SERVER + '/api/art?' + qs({ name: base, token: authToken||'' });
+    img.src = art;
+    img.alt = base;
+    th.appendChild(img);
+    const pct = v.progress && typeof v.progress.percent === 'number' ? v.progress.percent : null;
+    let railBar = null;
+    if (pct != null) {
+      const safePct = Math.max(0, Math.min(100, pct));
+      card.classList.add('has-progress');
+      const bar = document.createElement('div'); bar.className = 'progress';
+      const fill = document.createElement('div'); fill.className = 'fill';
+      fill.style.width = safePct + '%';
+      bar.appendChild(fill);
+      th.appendChild(bar);
+
+      railBar = document.createElement('div'); railBar.className = 'rail-progress';
+      const railFill = document.createElement('div'); railFill.className = 'fill';
+      railFill.style.width = safePct + '%';
+      railBar.appendChild(railFill);
+    }
+    const lbl = document.createElement('div'); lbl.className = 'label'; lbl.textContent = base || v.name || 'Untitled';
+    card.appendChild(th); card.appendChild(lbl);
+    if (railBar) card.appendChild(railBar);
+    if (opts.continueItem) {
+      const reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'rail-reset';
+      reset.textContent = '×';
+      reset.setAttribute('aria-label', 'Remove from Continue Watching');
+      reset.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        await clearProgressForItem(v);
+        await refreshCurrentBrowse();
+      };
+      card.appendChild(reset);
+    }
+    card.onclick = () => play(v);
+    card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); play(v); } };
+    return card;
+  }
+
   function renderFiles(videos) {
     els.grid.innerHTML = '';
-    videos.forEach(v => {
-      const card = document.createElement('div'); card.className = 'card';
-      const th = document.createElement('div'); th.className = 'thumb';
-      const img = document.createElement('img');
-      const base = stripExt(v.name||'');
-      const art = SERVER + '/api/art?' + qs({ name: base, token: authToken||'' });
-      img.src = art;
-      img.alt = base;
-      th.appendChild(img);
-      const lbl = document.createElement('div'); lbl.className = 'label'; lbl.textContent = base || v.name || 'Untitled';
-      card.appendChild(th); card.appendChild(lbl);
-      card.onclick = () => play(v.id, v.name);
-      els.grid.appendChild(card);
-    });
+    videos.forEach(v => els.grid.appendChild(createMediaCard(v)));
+  }
+
+  function renderContinue(items) {
+    els.continueRail.innerHTML = '';
+    if (!items || !items.length) {
+      els.continueSection.classList.add('hidden');
+      els.appShell.classList.add('no-continue');
+      return;
+    }
+    els.appShell.classList.remove('no-continue');
+    els.continueSection.classList.remove('hidden');
+    items.forEach(v => els.continueRail.appendChild(createMediaCard(v, { continueItem: true })));
   }
 
   // --- Navigation ---
   async function browse(dirId=null) {
+    currentSearch = "";
+    if (els.searchInput) els.searchInput.value = '';
     setStatus('Loading...');
-    const path = dirId==null ? '/api/browse' : '/api/browse?'+qs({dir_id:dirId});
+    const path = dirId==null ? '/api/browse?'+qs({device_id:DEVICE_ID}) : '/api/browse?'+qs({dir_id:dirId, device_id:DEVICE_ID});
     const r = await api(path);
     // Restricted?
     if (r.json && r.json.authorized===false) {
@@ -250,7 +388,44 @@
     els.dirLabel.textContent = data.dirName || '/';
     renderFolders(data.folders || []);
     renderFiles(data.videos || []);
+    loadContinue();
     setStatus('');
+  }
+
+  async function loadContinue() {
+    const r = await api('/api/progress/continue?' + qs({ device_id: DEVICE_ID, limit: 30 }));
+    if (r.ok && r.json && Array.isArray(r.json.items)) renderContinue(r.json.items);
+    else renderContinue([]);
+  }
+
+  async function runSearch(query) {
+    const q = (query || '').trim();
+    if (!q) {
+      currentSearch = "";
+      const current = stack.length ? stack[stack.length - 1].id : null;
+      await browse(current);
+      return;
+    }
+    currentSearch = q;
+    setStatus('Searching...');
+    const r = await api('/api/search?' + qs({ q, device_id: DEVICE_ID, limit: 150 }));
+    if (!r.ok || !r.json || !Array.isArray(r.json.media)) {
+      setStatus('Search error');
+      return;
+    }
+    els.dirLabel.textContent = 'Search: "' + q + '"';
+    renderFiles(r.json.media);
+    loadContinue();
+    setStatus(r.json.media.length ? '' : 'No results');
+  }
+
+  async function refreshCurrentBrowse() {
+    if (currentSearch) {
+      await runSearch(currentSearch);
+      return;
+    }
+    const current = stack.length ? stack[stack.length - 1].id : null;
+    await browse(current);
   }
 
   function goUp() {
@@ -271,17 +446,73 @@
   }
 
   // --- Player ---
-  function play(mediaId, title) {
+  function play(item) {
+    currentVideo = item;
+    const resumeAt = item.progress && item.progress.position_seconds ? Number(item.progress.position_seconds) : 0;
     // Token must be in query param for video <source> (no custom headers)
-    const src = SERVER + '/api/stream?' + qs({media_id: mediaId, token: authToken||''});
+    const src = SERVER + '/api/stream?' + qs({media_id: item.id, token: authToken||''});
     els.video.src = src;
+    els.playerStartOver.classList.toggle('hidden', resumeAt <= 10);
+    els.video.onloadedmetadata = () => {
+      const dur = Number(els.video.duration || 0);
+      if (resumeAt > 10 && (!dur || dur - resumeAt > 120)) {
+        try { els.video.currentTime = resumeAt; } catch(e) {}
+      }
+    };
     els.player.style.display = 'flex';
     els.video.play().catch(()=>{ /* user gesture may be required */ });
   }
-  function closePlayer() {
+
+  function progressBody(position, duration) {
+    return JSON.stringify({
+      device_id: DEVICE_ID,
+      media_id: currentVideo && currentVideo.id,
+      media_key: currentVideo && currentVideo.media_key,
+      position_seconds: position,
+      duration_seconds: duration
+    });
+  }
+
+  function saveCurrentProgress(opts={}) {
+    if (!currentVideo || !els.video.src) return Promise.resolve(null);
+    const pos = Number(els.video.currentTime || 0);
+    const dur = Number(els.video.duration || 0);
+    if (!Number.isFinite(pos)) return Promise.resolve(null);
+    const headers = {'Content-Type':'application/json'};
+    if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+    return fetch(SERVER + '/api/progress', {
+      method:'POST', headers, body: progressBody(pos, Number.isFinite(dur) && dur > 0 ? dur : null), keepalive: !!opts.keepalive
+    }).catch(()=>null);
+  }
+
+  function clearProgressForItem(item) {
+    if (!item) return Promise.resolve(null);
+    const path = '/api/progress?' + qs({device_id: DEVICE_ID, media_id: item.id, media_key: item.media_key || ''});
+    return api(path, { method:'DELETE' }).catch(()=>null);
+  }
+
+  function clearCurrentProgress() {
+    return clearProgressForItem(currentVideo);
+  }
+
+  function startProgressTimer() {
+    stopProgressTimer();
+    progressTimer = setInterval(() => saveCurrentProgress(), 15000);
+  }
+
+  function stopProgressTimer() {
+    if (progressTimer) clearInterval(progressTimer);
+    progressTimer = null;
+  }
+  async function closePlayer() {
+    const saved = saveCurrentProgress({keepalive:true});
+    stopProgressTimer();
     els.video.pause();
     els.video.removeAttribute('src');
     els.player.style.display = 'none';
+    await saved;
+    currentVideo = null;
+    await refreshCurrentBrowse();
   }
 
   // --- PIN modal ---
@@ -331,9 +562,24 @@
   }
 
   // --- Events ---
-  els.btnRoot.onclick = () => { stack.length = 0; authToken = ""; browse(null); };
+  els.btnRoot.onclick = () => { stack.length = 0; authToken = ""; els.searchInput.value = ''; currentSearch = ""; browse(null); };
   els.btnSettings.onclick = () => openSettings();
+  els.searchForm.onsubmit = (e) => { e.preventDefault(); runSearch(els.searchInput.value); };
+  els.searchClear.onclick = () => { els.searchInput.value = ''; runSearch(''); };
   els.playerClose.onclick = closePlayer;
+  els.playerStartOver.onclick = () => {
+    clearCurrentProgress();
+    try { els.video.currentTime = 0; } catch(e) {}
+    els.playerStartOver.classList.add('hidden');
+  };
+  els.video.addEventListener('play', startProgressTimer);
+  els.video.addEventListener('pause', () => { saveCurrentProgress(); stopProgressTimer(); });
+  els.video.addEventListener('ended', async () => {
+    await saveCurrentProgress();
+    stopProgressTimer();
+    await refreshCurrentBrowse();
+  });
+  window.addEventListener('beforeunload', () => saveCurrentProgress({keepalive:true}));
 
   els.pinCancel.onclick = () => { closePIN(); setStatus(''); };
   els.pinOk.onclick = submitPIN;

@@ -1,5 +1,5 @@
 # home_media_server
-Intended for use with a Raspberry Pi 4/5
+This project is a home media server along the lines of Plex, Netflix, Disney+, etc for your legal personal use home video files. If the UI looks like it was designed by a 5 year old, that's because it was. Deal with it. The web server creates an accessible webpage on the device localhost on port 8008 to navigate thru your video files. Intended for use with a Raspberry Pi 4/5 on your home LAN. This is meant to be coupled with LAN_android_app and LAN_roku_app.
 
 ## Modify config.yaml
 <code>library_root</code> is where you have the videos stored. Use folders to make navigation easier. 

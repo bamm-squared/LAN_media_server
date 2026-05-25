@@ -30,6 +30,8 @@ VIDEO_EXTS = {".mp4", ".m4v", ".mkv", ".mov", ".avi", ".wmv", ".mpg", ".mpeg"}
 SUB_EXTS = [".srt", ".vtt"]
 ART_EXTS = [".png", ".jpg", ".jpeg", ".webp"]
 DEFAULT_HIDDEN_DIRS = ["images"]
+PROGRESS_BEGINNING_SECONDS = 10
+PROGRESS_COMPLETE_REMAINING_SECONDS = 120
 
 class Settings(BaseModel):
     # Required
@@ -67,6 +69,38 @@ def db():
     conn.row_factory = sqlite3.Row
     return conn
 
+def _columns(conn: sqlite3.Connection, table: str) -> set:
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table})")
+    return {str(r["name"]) for r in cur.fetchall()}
+
+def _rel_key(p: Path) -> str:
+    """Stable key for rows derived from a path relative to the media root."""
+    try:
+        rel = p.resolve().relative_to(LIB_ROOT)
+        if str(rel) == ".":
+            return ""
+        return rel.as_posix()
+    except Exception:
+        return p.resolve().as_posix()
+
+def _dedupe_by_key(conn: sqlite3.Connection, table: str, key_col: str):
+    cur = conn.cursor()
+    cur.execute(
+        f"""
+        SELECT {key_col} AS k, MIN(id) AS keep_id
+        FROM {table}
+        WHERE {key_col} IS NOT NULL
+        GROUP BY {key_col}
+        HAVING COUNT(*) > 1
+        """
+    )
+    for row in cur.fetchall():
+        cur.execute(
+            f"DELETE FROM {table} WHERE {key_col}=? AND id<>?",
+            (row["k"], int(row["keep_id"])),
+        )
+
 def init_db():
     with DB_LOCK, db() as conn:
         c = conn.cursor()
@@ -74,6 +108,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS folders (
                 id INTEGER PRIMARY KEY,
                 path TEXT UNIQUE NOT NULL,
+                rel_path TEXT,
                 name TEXT NOT NULL,
                 parent_id INTEGER,
                 is_kids INTEGER DEFAULT 1,
@@ -84,10 +119,47 @@ def init_db():
             CREATE TABLE IF NOT EXISTS media (
                 id INTEGER PRIMARY KEY,
                 path TEXT UNIQUE NOT NULL,
+                media_key TEXT,
                 name TEXT NOT NULL,
                 folder_id INTEGER NOT NULL
             )
         """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS watch_progress (
+                device_id TEXT NOT NULL,
+                media_key TEXT NOT NULL,
+                position_seconds REAL NOT NULL,
+                duration_seconds REAL,
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY (device_id, media_key)
+            )
+        """)
+        folder_cols = _columns(conn, "folders")
+        if "rel_path" not in folder_cols:
+            c.execute("ALTER TABLE folders ADD COLUMN rel_path TEXT")
+        media_cols = _columns(conn, "media")
+        if "media_key" not in media_cols:
+            c.execute("ALTER TABLE media ADD COLUMN media_key TEXT")
+
+        c.execute("SELECT id, path FROM folders WHERE rel_path IS NULL")
+        for row in c.fetchall():
+            c.execute(
+                "UPDATE folders SET rel_path=? WHERE id=?",
+                (_rel_key(Path(row["path"])), int(row["id"])),
+            )
+        c.execute("SELECT id, path FROM media WHERE media_key IS NULL")
+        for row in c.fetchall():
+            c.execute(
+                "UPDATE media SET media_key=? WHERE id=?",
+                (_rel_key(Path(row["path"])), int(row["id"])),
+            )
+
+        _dedupe_by_key(conn, "folders", "rel_path")
+        _dedupe_by_key(conn, "media", "media_key")
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_rel_path ON folders(rel_path)")
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_media_media_key ON media(media_key)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_media_folder_id ON media(folder_id)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_watch_progress_updated_at ON watch_progress(updated_at)")
         conn.commit()
 
 def is_video(p: Path) -> bool:
@@ -103,39 +175,57 @@ def find_subtitle(p: Path) -> Optional[Path]:
 
 def upsert_folder(conn: sqlite3.Connection, p: Path, parent_id: Optional[int]) -> int:
     p = p.resolve()
+    rel_path = _rel_key(p)
     name = p.name if p != LIB_ROOT else p.name or "/"
     cur = conn.cursor()
-    cur.execute("SELECT id FROM folders WHERE path=?", (str(p),))
+    cur.execute("SELECT id FROM folders WHERE rel_path=?", (rel_path,))
     row = cur.fetchone()
+    if row is None:
+        cur.execute("SELECT id FROM folders WHERE path=?", (str(p),))
+        row = cur.fetchone()
     if row:
         fid = int(row["id"])
-        # keep name synced
-        cur.execute("UPDATE folders SET name=?, parent_id=? WHERE id=?", (name, parent_id, fid))
-        conn.commit()
+        # keep path, name, and parent synced while preserving the stable id
+        cur.execute(
+            "UPDATE folders SET path=?, rel_path=?, name=?, parent_id=? WHERE id=?",
+            (str(p), rel_path, name, parent_id, fid),
+        )
         return fid
     cur.execute(
-        "INSERT INTO folders(path, name, parent_id, is_kids) VALUES (?, ?, ?, ?)",
-        (str(p), name, parent_id, 1 if SETTINGS.default_is_kids else 0)
+        "INSERT INTO folders(path, rel_path, name, parent_id, is_kids) VALUES (?, ?, ?, ?, ?)",
+        (str(p), rel_path, name, parent_id, 1 if SETTINGS.default_is_kids else 0)
     )
-    fid = cur.lastrowid
-    conn.commit()
-    return fid
+    return int(cur.lastrowid)
 
 def upsert_media(conn: sqlite3.Connection, p: Path, folder_id: int) -> int:
     p = p.resolve()
+    media_key = _rel_key(p)
     name = p.name
     cur = conn.cursor()
-    cur.execute("SELECT id FROM media WHERE path=?", (str(p),))
+    cur.execute("SELECT id FROM media WHERE media_key=?", (media_key,))
     row = cur.fetchone()
+    if row is None:
+        cur.execute("SELECT id FROM media WHERE path=?", (str(p),))
+        row = cur.fetchone()
     if row:
         mid = int(row["id"])
-        cur.execute("UPDATE media SET name=?, folder_id=? WHERE id=?", (name, folder_id, mid))
-        conn.commit()
+        cur.execute(
+            "UPDATE media SET path=?, media_key=?, name=?, folder_id=? WHERE id=?",
+            (str(p), media_key, name, folder_id, mid),
+        )
         return mid
-    cur.execute("INSERT INTO media(path, name, folder_id) VALUES (?, ?, ?)", (str(p), name, folder_id))
-    mid = cur.lastrowid
-    conn.commit()
-    return mid
+    cur.execute(
+        "INSERT INTO media(path, media_key, name, folder_id) VALUES (?, ?, ?, ?)",
+        (str(p), media_key, name, folder_id),
+    )
+    return int(cur.lastrowid)
+
+def _delete_unseen(conn: sqlite3.Connection, table: str, key_col: str, seen: set):
+    cur = conn.cursor()
+    cur.execute(f"SELECT rowid AS rid, {key_col} AS k FROM {table}")
+    stale_ids = [int(row["rid"]) for row in cur.fetchall() if row["k"] is None or row["k"] not in seen]
+    for row_id in stale_ids:
+        cur.execute(f"DELETE FROM {table} WHERE rowid=?", (row_id,))
 
 def _is_hidden_name(name: str) -> bool:
     return name.lower() in {n.lower() for n in SETTINGS.hidden_dir_names}
@@ -184,15 +274,12 @@ def scan_library(full_rescan: bool = False) -> int:
     count = 0
     with DB_LOCK, db() as conn:
         c = conn.cursor()
-        if full_rescan:
-            c.execute("DELETE FROM media")
-            c.execute("DELETE FROM folders")
-            conn.commit()
-
         root_id = upsert_folder(conn, LIB_ROOT, None)
         c.execute("UPDATE folders SET is_kids=? WHERE id=?", (1 if _is_kids_path(LIB_ROOT) else 0, root_id))
 
         path_to_id: Dict[Path, int] = {LIB_ROOT: root_id}
+        seen_folders = {_rel_key(LIB_ROOT)}
+        seen_media = set()
 
         for dirpath, dirnames, filenames in os.walk(LIB_ROOT):
             # hide any directory names listed (e.g., "images")
@@ -211,6 +298,7 @@ def scan_library(full_rescan: bool = False) -> int:
                 path_to_id[d] = fid
             else:
                 fid = path_to_id[d]
+            seen_folders.add(_rel_key(d))
 
             # set classification based on config
             c.execute("UPDATE folders SET is_kids=? WHERE id=?", (1 if _is_kids_path(d) else 0, fid))
@@ -223,8 +311,12 @@ def scan_library(full_rescan: bool = False) -> int:
                 p = d / fn
                 if is_video(p):
                     upsert_media(conn, p, fid)
+                    seen_media.add(_rel_key(p))
                     count += 1
 
+        _delete_unseen(conn, "media", "media_key", seen_media)
+        _delete_unseen(conn, "folders", "rel_path", seen_folders)
+        _delete_unseen(conn, "watch_progress", "media_key", seen_media)
         conn.commit()
     return count
 
@@ -303,6 +395,74 @@ def check_request_authorized(request: Request, folder_id: int) -> bool:
         return False
     return verify_folder_token(token, folder_id)
 
+def _clean_device_id(device_id: Optional[str]) -> str:
+    return (device_id or "").strip()[:128]
+
+def _serialize_progress(position: float, duration: Optional[float], updated_at: int) -> Dict:
+    out = {
+        "position_seconds": max(0.0, float(position)),
+        "duration_seconds": float(duration) if duration is not None and duration > 0 else None,
+        "updated_at": int(updated_at),
+    }
+    if out["duration_seconds"]:
+        out["percent"] = min(100.0, max(0.0, (out["position_seconds"] / out["duration_seconds"]) * 100.0))
+        out["remaining_seconds"] = max(0.0, out["duration_seconds"] - out["position_seconds"])
+    else:
+        out["percent"] = None
+        out["remaining_seconds"] = None
+    return out
+
+def _progress_should_clear(position: float, duration: Optional[float]) -> bool:
+    if position <= PROGRESS_BEGINNING_SECONDS:
+        return True
+    if duration is not None and duration > 0:
+        remaining = duration - position
+        if remaining <= PROGRESS_COMPLETE_REMAINING_SECONDS:
+            return True
+    return False
+
+def _media_row_by_ref(conn: sqlite3.Connection, media_id: Optional[int] = None, media_key: Optional[str] = None) -> Optional[sqlite3.Row]:
+    cur = conn.cursor()
+    if media_key:
+        cur.execute("SELECT id, path, media_key, name, folder_id FROM media WHERE media_key=?", (media_key,))
+        row = cur.fetchone()
+        if row:
+            return row
+    if media_id is not None:
+        cur.execute("SELECT id, path, media_key, name, folder_id FROM media WHERE id=?", (media_id,))
+        return cur.fetchone()
+    return None
+
+def _progress_for_key(conn: sqlite3.Connection, device_id: str, media_key: str) -> Optional[Dict]:
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT position_seconds, duration_seconds, updated_at FROM watch_progress WHERE device_id=? AND media_key=?",
+        (device_id, media_key),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    return _serialize_progress(row["position_seconds"], row["duration_seconds"], row["updated_at"])
+
+def _progress_for_keys(conn: sqlite3.Connection, device_id: str, media_keys: List[str]) -> Dict[str, Dict]:
+    progress = {}
+    cur = conn.cursor()
+    for key in media_keys:
+        cur.execute(
+            "SELECT position_seconds, duration_seconds, updated_at FROM watch_progress WHERE device_id=? AND media_key=?",
+            (device_id, key),
+        )
+        row = cur.fetchone()
+        if row:
+            progress[key] = _serialize_progress(row["position_seconds"], row["duration_seconds"], row["updated_at"])
+    return progress
+
+def _media_payload(row: sqlite3.Row, progress: Optional[Dict] = None) -> Dict:
+    out = {"id": int(row["id"]), "media_id": int(row["id"]), "media_key": row["media_key"], "name": row["name"]}
+    if progress:
+        out["progress"] = progress
+    return out
+
 # ------------------------------------------------------------
 # FastAPI app
 # ------------------------------------------------------------
@@ -328,6 +488,13 @@ class AuthFolderReq(BaseModel):
 class RescanReq(BaseModel):
     full: bool = False
 
+class ProgressReq(BaseModel):
+    device_id: str
+    media_id: Optional[int] = None
+    media_key: Optional[str] = None
+    position_seconds: float
+    duration_seconds: Optional[float] = None
+
 # ------------------------------------------------------------
 # Browse / Stream / Subtitle
 # ------------------------------------------------------------
@@ -338,7 +505,7 @@ def folder_row(conn: sqlite3.Connection, folder_id: int) -> Optional[sqlite3.Row
     return cur.fetchone()
 
 @app.get("/api/browse")
-def api_browse(dir_id: Optional[int] = None, request: Request = None):
+def api_browse(dir_id: Optional[int] = None, device_id: Optional[str] = None, request: Request = None):
     with DB_LOCK, db() as conn:
         c = conn.cursor()
 
@@ -364,8 +531,11 @@ def api_browse(dir_id: Optional[int] = None, request: Request = None):
         subdirs = [{"id": int(r["id"]), "name": r["name"]} for r in c.fetchall()]
 
         # media
-        c.execute("SELECT id, name FROM media WHERE folder_id=? ORDER BY name COLLATE NOCASE ASC", (dir_id,))
-        media = [{"id": int(r["id"]), "name": r["name"]} for r in c.fetchall()]
+        c.execute("SELECT id, media_key, name FROM media WHERE folder_id=? ORDER BY name COLLATE NOCASE ASC", (dir_id,))
+        media_rows = c.fetchall()
+        clean_device = _clean_device_id(device_id)
+        progress = _progress_for_keys(conn, clean_device, [r["media_key"] for r in media_rows]) if clean_device else {}
+        media = [_media_payload(r, progress.get(r["media_key"])) for r in media_rows]
 
         return {
             "authorized": True,
@@ -373,6 +543,54 @@ def api_browse(dir_id: Optional[int] = None, request: Request = None):
             "subdirs": subdirs,
             "media": media,
         }
+
+@app.get("/api/search")
+def api_search(q: str, device_id: Optional[str] = None, limit: int = 100, request: Request = None):
+    term = (q or "").strip()
+    if not term:
+        return {"query": term, "media": []}
+    if limit < 1:
+        limit = 1
+    if limit > 250:
+        limit = 250
+
+    like = f"%{term}%"
+    db_limit = min(limit * 4, 1000)
+    with DB_LOCK, db() as conn:
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT m.id, m.media_key, m.name, m.folder_id, f.name AS folder_name, f.rel_path AS folder_path
+            FROM media m
+            JOIN folders f ON f.id = m.folder_id
+            WHERE m.name LIKE ? COLLATE NOCASE
+            ORDER BY m.name COLLATE NOCASE ASC
+            LIMIT ?
+            """,
+            (like, db_limit),
+        )
+        rows = []
+        media_keys = []
+        for row in c.fetchall():
+            folder_id = int(row["folder_id"])
+            if folder_requires_auth(folder_id) and not check_request_authorized(request, folder_id):
+                continue
+            rows.append(row)
+            media_keys.append(row["media_key"])
+
+        clean_device = _clean_device_id(device_id)
+        progress = _progress_for_keys(conn, clean_device, media_keys) if clean_device else {}
+        media = []
+        for row in rows:
+            item = _media_payload(row, progress.get(row["media_key"]))
+            item["folder_id"] = int(row["folder_id"])
+            item["folder_name"] = row["folder_name"]
+            item["folder_path"] = row["folder_path"]
+            media.append(item)
+            if len(media) >= limit:
+                break
+
+        return {"query": term, "media": media}
 
 @app.get("/api/stream")
 def api_stream(media_id: int, request: Request = None):
@@ -408,6 +626,117 @@ def api_subtitle(media_id: int, request: Request = None):
             raise HTTPException(404, "Subtitle not found")
         mt, _ = mimetypes.guess_type(sub.name)
         return FileResponse(str(sub), media_type=mt or "text/plain")
+
+@app.get("/api/progress")
+def api_get_progress(device_id: str, media_id: Optional[int] = None, media_key: Optional[str] = None, request: Request = None):
+    clean_device = _clean_device_id(device_id)
+    if not clean_device:
+        raise HTTPException(400, "Missing device_id")
+    with DB_LOCK, db() as conn:
+        row = _media_row_by_ref(conn, media_id=media_id, media_key=media_key)
+        if not row:
+            raise HTTPException(404, "Media not found")
+        folder_id = int(row["folder_id"])
+        if folder_requires_auth(folder_id) and not check_request_authorized(request, folder_id):
+            raise HTTPException(401, "Unauthorized")
+        return {"progress": _progress_for_key(conn, clean_device, row["media_key"])}
+
+@app.post("/api/progress")
+def api_save_progress(req: ProgressReq, request: Request = None):
+    clean_device = _clean_device_id(req.device_id)
+    if not clean_device:
+        raise HTTPException(400, "Missing device_id")
+    position = max(0.0, float(req.position_seconds or 0.0))
+    duration = req.duration_seconds
+    if duration is not None:
+        duration = max(0.0, float(duration))
+
+    with DB_LOCK, db() as conn:
+        row = _media_row_by_ref(conn, media_id=req.media_id, media_key=req.media_key)
+        if not row:
+            raise HTTPException(404, "Media not found")
+        folder_id = int(row["folder_id"])
+        if folder_requires_auth(folder_id) and not check_request_authorized(request, folder_id):
+            raise HTTPException(401, "Unauthorized")
+
+        c = conn.cursor()
+        if _progress_should_clear(position, duration):
+            c.execute(
+                "DELETE FROM watch_progress WHERE device_id=? AND media_key=?",
+                (clean_device, row["media_key"]),
+            )
+            conn.commit()
+            return {"ok": True, "cleared": True}
+
+        updated_at = int(time.time())
+        c.execute(
+            """
+            INSERT INTO watch_progress(device_id, media_key, position_seconds, duration_seconds, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(device_id, media_key) DO UPDATE SET
+                position_seconds=excluded.position_seconds,
+                duration_seconds=excluded.duration_seconds,
+                updated_at=excluded.updated_at
+            """,
+            (clean_device, row["media_key"], position, duration, updated_at),
+        )
+        conn.commit()
+        return {"ok": True, "cleared": False, "progress": _serialize_progress(position, duration, updated_at)}
+
+@app.delete("/api/progress")
+def api_delete_progress(device_id: str, media_id: Optional[int] = None, media_key: Optional[str] = None, request: Request = None):
+    clean_device = _clean_device_id(device_id)
+    if not clean_device:
+        raise HTTPException(400, "Missing device_id")
+    with DB_LOCK, db() as conn:
+        row = _media_row_by_ref(conn, media_id=media_id, media_key=media_key)
+        if not row:
+            raise HTTPException(404, "Media not found")
+        folder_id = int(row["folder_id"])
+        if folder_requires_auth(folder_id) and not check_request_authorized(request, folder_id):
+            raise HTTPException(401, "Unauthorized")
+        conn.execute("DELETE FROM watch_progress WHERE device_id=? AND media_key=?", (clean_device, row["media_key"]))
+        conn.commit()
+        return {"ok": True}
+
+@app.get("/api/progress/continue")
+def api_continue_watching(device_id: str, limit: int = 30, request: Request = None):
+    clean_device = _clean_device_id(device_id)
+    if not clean_device:
+        raise HTTPException(400, "Missing device_id")
+    limit = min(100, max(1, int(limit or 30)))
+    items = []
+    with DB_LOCK, db() as conn:
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT wp.media_key, wp.position_seconds, wp.duration_seconds, wp.updated_at,
+                   m.id, m.name, m.folder_id,
+                   f.name AS folder_name, f.is_kids
+            FROM watch_progress wp
+            JOIN media m ON m.media_key = wp.media_key
+            JOIN folders f ON f.id = m.folder_id
+            WHERE wp.device_id=?
+            ORDER BY wp.updated_at DESC
+            LIMIT ?
+            """,
+            (clean_device, limit),
+        )
+        for row in c.fetchall():
+            folder_id = int(row["folder_id"])
+            if int(row["is_kids"]) == 0 and not check_request_authorized(request, folder_id):
+                continue
+            progress = _serialize_progress(row["position_seconds"], row["duration_seconds"], row["updated_at"])
+            items.append({
+                "id": int(row["id"]),
+                "media_id": int(row["id"]),
+                "media_key": row["media_key"],
+                "name": row["name"],
+                "folder_id": folder_id,
+                "folder_name": row["folder_name"],
+                "progress": progress,
+            })
+    return {"items": items}
 
 # ------------------------------------------------------------
 # Artwork: /images/<name>.(png|jpg|jpeg|webp)
